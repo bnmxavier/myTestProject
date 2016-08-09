@@ -32,6 +32,8 @@
 #include <bits/socket.h>      // structs msghdr and cmsghdr
 #include <net/if.h>           // struct ifreq
 
+
+
 // Definition of pktinfo6 created from definition of in6_pktinfo in netinet/in.h.
 // This should remove "redefinition of in6_pktinfo" errors in some linux variants.
 typedef struct _pktinfo6 pktinfo6;
@@ -57,7 +59,7 @@ main (int argc, char **argv)
   struct sockaddr_in6 src, dst;
   struct nd_neighbor_advert *na;
   uint8_t *outpack, *options, *psdhdr, hoplimit;
-  struct msghdr msghdr;
+  struct msghdr msg={};
   struct ifreq ifr;
   struct cmsghdr *cmsghdr1, *cmsghdr2;
   pktinfo6 *pktinfo;
@@ -66,28 +68,29 @@ main (int argc, char **argv)
 
 //Start my changes
   char *hostname;
-  hostname=allocate_strmem(40);
+  hostname=allocate_strmem(64);
 //End my changes
 
   // Allocate memory for various arrays.
-  interface = allocate_strmem (40);
-  target = allocate_strmem (40);
-  source = allocate_strmem (40);
+  interface = allocate_strmem (64);
+  target = allocate_strmem (64);
+  source = allocate_strmem (64);
   outpack = allocate_ustrmem (IP_MAXPACKET);
   options = allocate_ustrmem (optlen);
   psdhdr = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send packet through.
-  strcpy (interface, "eth0\0"); // changed interface here
+  strcpy (interface, "enp0s3\0"); // changed interface here
   //Start my changes
-  if(gethostname(hostname, sizeof(hostname))==NULL)
+  /*if((gethostname(hostname, sizeof(hostname)))==-1)
   {
     perror("gethostname");
     exit(1);
   }
+  */
 
   // Source (node sending advertisement) IPv6 link-local address
-  strcpy (source, hostname);
+  strcpy (source, "fe80::84c4:cefb:1095:5160");
 //End my changes
   // Destination IPv6 address either:
   // 1) unicast address of node which sent solicitation, or if the
@@ -126,6 +129,7 @@ main (int argc, char **argv)
     perror ("Failed to get socket descriptor ");
     exit (EXIT_FAILURE);
   }
+  printf("socket index is...%d\n", sd); // changes I've made //debug
 
   // Use ioctl() to look up advertising node's (i.e., source's) interface name and get its MAC address.
   memset (&ifr, 0, sizeof (ifr));
@@ -178,32 +182,32 @@ main (int argc, char **argv)
   //        + next header (1 byte)
   psdhdrlen = 16 + 16 + 4 + 3 + 1 + NA_HDRLEN + optlen;
 
-  // Prepare msghdr for sendmsg().
-  memset (&msghdr, 0, sizeof (msghdr));
-  msghdr.msg_name = &dst;  // Destination IPv6 address as struct sockaddr_in6
-  msghdr.msg_namelen = sizeof (dst);
+  // Prepare msg for sendmsg().
+  memset (&msg, 0, sizeof (msg));
+  msg.msg_name = &dst;  // Destination IPv6 address as struct sockaddr_in6
+  msg.msg_namelen = sizeof (dst);
   memset (&iov, 0, sizeof (iov));
-  iov[0].iov_base = (uint8_t *) outpack;  // Point msghdr to buffer outpack
+  iov[0].iov_base = (uint8_t *) outpack;  // Point msg to buffer outpack
   iov[0].iov_len = NA_HDRLEN + optlen;
-  msghdr.msg_iov = iov;                 // scatter/gather array
-  msghdr.msg_iovlen = 1;                // number of elements in scatter/gather array
+  msg.msg_iov = iov;                 // scatter/gather array
+  msg.msg_iovlen = 1;                // number of elements in scatter/gather array
 
-  // Tell msghdr we're adding cmsghdr data to change hop limit and specify interface.
+  // Tell msg we're adding cmsghdr data to change hop limit and specify interface.
   // Allocate some memory for our cmsghdr data.
   cmsglen = CMSG_SPACE (sizeof (int)) + CMSG_SPACE (sizeof (pktinfo));
-  msghdr.msg_control = allocate_ustrmem (cmsglen);
-  msghdr.msg_controllen = cmsglen;
+  msg.msg_control = allocate_ustrmem (cmsglen);
+  msg.msg_controllen = cmsglen;
 
   // Change hop limit to 255 as required for neighbor advertisement (RFC 4861).
   hoplimit = 255u;
-  cmsghdr1 = CMSG_FIRSTHDR (&msghdr);
+  cmsghdr1 = CMSG_FIRSTHDR (&msg);
   cmsghdr1->cmsg_level = IPPROTO_IPV6;
   cmsghdr1->cmsg_type = IPV6_HOPLIMIT;  // We want to change hop limit
   cmsghdr1->cmsg_len = CMSG_LEN (sizeof (int));
   *(CMSG_DATA (cmsghdr1)) = hoplimit;  // Copy pointer to int hoplimit
 
   // Specify source interface index for this packet via cmsghdr data.
-  cmsghdr2 = CMSG_NXTHDR (&msghdr, cmsghdr1);
+  cmsghdr2 = CMSG_NXTHDR (&msg, cmsghdr1);
   cmsghdr2->cmsg_level = IPPROTO_IPV6;
   cmsghdr2->cmsg_type = IPV6_PKTINFO;  // We want to specify interface here
   cmsghdr2->cmsg_len = CMSG_LEN (sizeof (pktinfo));
@@ -227,7 +231,7 @@ main (int argc, char **argv)
   printf ("Checksum: %x\n", ntohs (na->nd_na_hdr.icmp6_cksum));
 
   // Send packet.
-  if (sendmsg (sd, &msghdr, 0) < 0) {
+  if (sendmsg (sd, &msg, 0) < 0) {
     perror ("sendmsg() failed ");
     exit (EXIT_FAILURE);
   }
@@ -240,7 +244,7 @@ main (int argc, char **argv)
   free (outpack);
   free (options);
   free (psdhdr);
-  free (msghdr.msg_control);
+  free (msg.msg_control);
 
   return (EXIT_SUCCESS);
 }

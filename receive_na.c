@@ -71,7 +71,7 @@ main (int argc, char **argv)
   destination = allocate_strmem (INET6_ADDRSTRLEN);
 
   // Interface to receive packet on.
-  strcpy (interface, "etho\0"); // changed interface here
+  strcpy (interface, "enp0s3\0"); // changed interface here
 
   // Prepare msghdr for recvmsg().
   memset (&msghdr, 0, sizeof (msghdr));
