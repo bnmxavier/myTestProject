@@ -64,6 +64,10 @@ main (int argc, char **argv)
   struct iovec iov[2];
   char *target, *source, *interface;
 
+//Start my changes
+  char *hostname;
+  hostname=allocate_strmem(40);
+//End my changes
 
   // Allocate memory for various arrays.
   interface = allocate_strmem (40);
@@ -74,16 +78,21 @@ main (int argc, char **argv)
   psdhdr = allocate_ustrmem (IP_MAXPACKET);
 
   // Interface to send packet through.
-  strcpy (interface, "eth0");
+  strcpy (interface, "eth0\0"); // changed interface here
+  //Start my changes
+  if(gethostname(hostname, sizeof(hostname))==NULL)
+  {
+    perror("gethostname");
+    exit(1);
+  }
 
-  // Source (node sending advertisement) IPv6 link-local address: you need to fill this out
-  strcpy (source, "");
-
+  // Source (node sending advertisement) IPv6 link-local address
+  strcpy (source, hostname);
+//End my changes
   // Destination IPv6 address either:
   // 1) unicast address of node which sent solicitation, or if the
   // solicitation came from the unspecified address (::), use the
   // 2) IPv6 "all nodes" link-local multicast address (ff02::1).
-  // You need to fill this out.
   strcpy (target, "ff02::1");
 
   // Fill out hints for getaddrinfo().
