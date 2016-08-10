@@ -31,7 +31,8 @@
 #include <bits/ioctls.h>      // defines values for argument "request" of ioctl. Here, we need SIOCGIFHWADDR
 #include <bits/socket.h>      // structs msghdr and cmsghdr
 #include <net/if.h>           // struct ifreq
-
+#include <arpa/inet.h>
+#include <sys/socket.h>
 
 
 // Definition of pktinfo6 created from definition of in6_pktinfo in netinet/in.h.
@@ -59,12 +60,13 @@ main (int argc, char **argv)
   struct sockaddr_in6 src, dst;
   struct nd_neighbor_advert *na;
   uint8_t *outpack, *options, *psdhdr, hoplimit;
-  struct msghdr msg={};
+  struct msghdr msg;
   struct ifreq ifr;
   struct cmsghdr *cmsghdr1, *cmsghdr2;
   pktinfo6 *pktinfo;
   struct iovec iov[2];
   char *target, *source, *interface;
+  char ipbuf[INET6_ADDRSTRLEN];
 
 //Start my changes
   char *hostname;
@@ -72,9 +74,9 @@ main (int argc, char **argv)
 //End my changes
 
   // Allocate memory for various arrays.
-  interface = allocate_strmem (64);
-  target = allocate_strmem (64);
-  source = allocate_strmem (64);
+  interface = allocate_strmem (40);
+  target = allocate_strmem (40);
+  source = allocate_strmem (40);
   outpack = allocate_ustrmem (IP_MAXPACKET);
   options = allocate_ustrmem (optlen);
   psdhdr = allocate_ustrmem (IP_MAXPACKET);
@@ -109,9 +111,16 @@ main (int argc, char **argv)
     fprintf (stderr, "getaddrinfo() failed: %s\n", gai_strerror (status));
     return (EXIT_FAILURE);
   }
+
   memset (&src, 0, sizeof (src));
   memcpy (&src, res->ai_addr, res->ai_addrlen);
   memcpy (psdhdr, src.sin6_addr.s6_addr, 16 * sizeof (uint8_t));  // Copy to checksum pseudo-header
+
+  //My changes
+  //debug
+  struct sockaddr_in6 *targip=(struct sockaddr_in6*)res->ai_addr;
+  inet_ntop(targip->sin6_family, &(targip->sin6_addr.s6_addr), ipbuf, INET6_ADDRSTRLEN);
+  printf("Source address is: %s\n", ipbuf);
   freeaddrinfo (res);
 
   // Resolve target using getaddrinfo().
@@ -122,8 +131,12 @@ main (int argc, char **argv)
   memset (&dst, 0, sizeof (dst));
   memcpy (&dst, res->ai_addr, res->ai_addrlen);
   memcpy (psdhdr + 16, dst.sin6_addr.s6_addr, 16 * sizeof (uint8_t));  // Copy to checksum pseudo-header
+//start changes
+  targip=(struct sockaddr_in6*)res->ai_addr;
+  inet_ntop(targip->sin6_family, &(targip->sin6_addr.s6_addr), ipbuf, INET6_ADDRSTRLEN);
+  printf("Target address is: %s\n", ipbuf);
+// end changes
   freeaddrinfo (res);
-
   // Request a socket descriptor sd.
   if ((sd = socket (AF_INET6, SOCK_RAW, IPPROTO_ICMPV6)) < 0) {
     perror ("Failed to get socket descriptor ");
